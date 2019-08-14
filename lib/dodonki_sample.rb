@@ -1,6 +1,7 @@
 require "dodonki_sample/version"
 
 module DodonkiSample
-  class Error < StandardError; end
-  # Your code goes here...
+  def self.test 
+    'Hello World'
+  end
 end
