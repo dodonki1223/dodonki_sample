@@ -11,6 +11,7 @@ Gem::Specification.new do |spec|
   spec.summary       = 'dodonki sample gem file'
   spec.description   = 'dodonki sample gem file'
   spec.homepage      = 'https://github.com/dodonki1223/dodonki_sample'
+  spec.license       = 'MIT'
 
   # spec.metadata["allowed_push_host"] = "TODO: Set to 'http://mygemserver.com'"
 
