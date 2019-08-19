@@ -1,6 +1,13 @@
 # frozen_string_literal: true
 
 require 'bundler/setup'
+require 'simplecov'
+
+# SimpleCovのロード処理（RSpecのファイルは除外する）
+SimpleCov.start do
+  add_filter '/spec/'
+end
+
 require 'dodonki_sample'
 
 RSpec.configure do |config|
