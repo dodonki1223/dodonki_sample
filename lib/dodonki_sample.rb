@@ -1,7 +1,9 @@
-require "dodonki_sample/version"
+# frozen_string_literal: true
+
+require 'dodonki_sample/version'
 
 module DodonkiSample
-  def self.test 
+  def self.test
     'Hello World'
   end
 end
