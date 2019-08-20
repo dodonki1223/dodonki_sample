@@ -76,3 +76,30 @@ jobs: # a collection of steps
           path: ./doc
           destination: yard-results
       # See https://circleci.com/docs/2.0/deployment-integrations/ for example deploy configs
+
+  deploy:
+    docker: # run the steps with Docker
+      - image: circleci/ruby:2.4.2-jessie-node # ...with this image as the primary container; this is where all `steps` will run
+    steps:
+      - checkout # special step to check out source code to working directory
+      - run:
+          name: deploy
+          command: |
+            mkdir ~/.gem
+            curl -u dodonki1223:$RUBYGEMS_PASSWORD https://rubygems.org/api/v1/api_key.yaml > ~/.gem/credentials; chmod 0600 ~/.gem/credentials
+            git config user.name dodonki1223
+            git config user.email $RUBYGEMS_EMAIL
+            bundle exec rake build
+            bundle exec rake release
+
+workflows:
+  version: 2
+  build-and-deploy:
+    jobs:
+      - build
+      - deploy:
+          requires:
+            - build
+          filters:
+            branches:
+              only: master
