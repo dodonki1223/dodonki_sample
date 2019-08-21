@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    dodonki_sample (0.1.7)
+    dodonki_sample (0.1.8)
 
 GEM
   remote: https://rubygems.org/
