@@ -1,135 +1,134 @@
-version: 2 # use CircleCI 2.0
-jobs: # a collection of steps
-  build: # runs not using Workflows must have a `build` job as entry point
-    parallelism: 3 # run three instances of this job in parallel
-    docker: # run the steps with Docker
-      - image: circleci/ruby:2.4.2-jessie-node # ...with this image as the primary container; this is where all `steps` will run
-        environment: # environment variables for primary container
-          BUNDLE_JOBS: 3
-          BUNDLE_RETRY: 3
-          BUNDLE_PATH: vendor/bundle
+version: 2.1
+orbs:
+  ruby: circleci/ruby@1.1.2
+  slack: circleci/slack@3.4.2
+executors:
+  base:
+    docker:
+      - image: cimg/ruby:2.6.6
+        auth:
+          username: dodonki1223
+          password: $DOCKERHUB_PASSWORD
+        environment:
+          BUNDLE_APP_CONFIG: .bundle
+          TZ: "Asia/Tokyo"
+    working_directory: ~/dodonki1223/dodonki_sample
 
-    steps: # a collection of executable commands
-      - checkout # special step to check out source code to working directory
+commands:
+  save-workspace:
+    steps:
+      - persist_to_workspace:
+          # working_directory からの相対パスか絶対パスを指定します
+          root: .
+          paths: .
 
-      - run:
-          name: install Bundler
-          command: |
-            echo 'export BUNDLER_VERSION=$(cat Gemfile.lock | tail -1 | tr -d " ")' >> $BASH_ENV
-            source $BASH_ENV
-            gem install bundler
+  using-workspace:
+    steps:
+      - attach_workspace:
+          # working_directory からの相対パスか絶対パスを指定します
+          at: .
 
-      # Which version of bundler?
-      - run:
-          name: Which bundler?
-          command: bundle -v
-
-      # Restore bundle cache
-      # Read about caching dependencies: https://circleci.com/docs/2.0/caching/
-      - restore_cache:
-          keys:
-            - gem-sample-{{ checksum "Gemfile.lock" }}
-            - gem-sample-
-
-      - run: # Install Ruby dependencies
-          name: Bundle Install
-          command: bundle check --path vendor/bundle || bundle install --deployment
-
-      # Store bundle cache for Ruby dependencies
-      - save_cache:
-          key: gem-sample-{{ checksum "Gemfile.lock" }}
-          paths:
-            - vendor/bundle
-
-      # run rubocop!
-      - run:
-          name: run rubocop
-          command: |
-            bundle exec rubocop
-      - run:
-          name: Run rspec in parallel
-          command: |
-            bundle exec rspec --profile 10 \
-                              --format RspecJunitFormatter \
-                              --out test_results/rspec.xml \
-                              --format progress \
-                              $(circleci tests glob "spec/**/*_spec.rb" | circleci tests split --split-by=timings)
-      # create document
-      - run:
-          name: create document
-          command: |
-            bundle exec yard
-
-      # Save test results for timing analysis
-      - store_test_results: # Upload test results for display in Test Summary: https://circleci.com/docs/2.0/collect-test-data/
-          path: test_results
-      - store_artifacts:
-          # テスト結果をtest-resultsディレクトリに吐き出す
-          path: test_results
-          destination: test-results
+  collect-reports:
+    steps:
       - store_artifacts:
           # カバレッジの結果をcoverage-resultsディレクトリに吐き出す
           path: coverage
           destination: coverage-results
+
+  create-document:
+    steps:
+      - run:
+          name: Create document
+          command: |
+            bundle exec yard
       - store_artifacts:
           # ドキュメントの結果をyard-resultsディレクトリに吐き出す
           path: ./doc
           destination: yard-results
-      # See https://circleci.com/docs/2.0/deployment-integrations/ for example deploy configs
 
-  deploy:
-    docker: # run the steps with Docker
-      - image: circleci/ruby:2.4.2-jessie-node # ...with this image as the primary container; this is where all `steps` will run
+  deploy-rubygems:
+    steps:
+      # ref:https://support.circleci.com/hc/ja/articles/115015628247-%E6%8E%A5%E7%B6%9A%E3%82%92%E7%B6%9A%E8%A1%8C%E3%81%97%E3%81%BE%E3%81%99%E3%81%8B-%E3%81%AF%E3%81%84-%E3%81%84%E3%81%84%E3%81%88-
+      # read/write両方の権限が必要
+      - add_ssh_keys:
+          fingerprints:
+            - "38:d2:72:5e:9f:67:93:9a:ec:95:94:a2:0e:bf:41:9e"
 
-    steps: # a collection of executable commands
-      - checkout # special step to check out source code to working directory
-
+      # ref:https://circleci.com/docs/2.0/gh-bb-integration/#establishing-the-authenticity-of-an-ssh-host
       - run:
-          name: install Bundler
+          name: Avoid hosts unknown for github
           command: |
-            echo 'export BUNDLER_VERSION=$(cat Gemfile.lock | tail -1 | tr -d " ")' >> $BASH_ENV
-            source $BASH_ENV
-            gem install bundler
-
-      # Which version of bundler?
-      - run:
-          name: Which bundler?
-          command: bundle -v
-
-      # Restore bundle cache
-      # Read about caching dependencies: https://circleci.com/docs/2.0/caching/
-      - restore_cache:
-          keys:
-            - gem-deploy-{{ checksum "Gemfile.lock" }}
-            - gem-deploy-
-
-      - run: # Install Ruby dependencies
-          name: Bundle Install
-          command: bundle check --path vendor/bundle || bundle install
-
-      # Store bundle cache for Ruby dependencies
-      - save_cache:
-          key: gem-deploy-{{ checksum "Gemfile.lock" }}
-          paths:
-            - vendor/bundle
+            mkdir -p ~/.ssh
+            echo 'github.com ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAq2A7hRGmdnm9tUDbO9IDSwBK6TbQa+PXYPCPy6rbTrTtw7PHkccKrpp0yVhp5HdEIcKr6pLlVDBfOLX9QUsyCOV0wzfjIJNlGEYsdlLJizHhbn2mUjvSAHQqZETYP81eFzLQNnPHt4EVVUh7VfDESU84KezmD5QlWpXLmvU31/yMf+Se8xhHTvKSCZIFImWwoG6mbUoWf9nzpIoaSjB+weqqUUmpaaasXVal72J+UX2B+2RPW3RcT0eOzQgqlJL3RKrTJvdsjE3JEAvGq3lGHSZXy28G3skua2SmVi/w4yCE6gbODqnTWlg7+wC604ydGXA8VJiS5ap43JXiUFFAaQ==
+                  bitbucket.org ssh-rsa AAAAB3NzaC1yc2EAAAABIwAAAQEAubiN81eDcafrgMeLzaFPsw2kNvEcqTKl/VqLat/MaB33pZy0y3rJZtnqwR2qOOvbwKZYKiEO1O6VqNEBxKvJJelCq0dTXWT5pbO2gDXC6h6QDXCaHo6pOHGPUy+YBaGQRGuSusMEASYiWunYN0vCAI8QaXnWMXNMdFP3jHAJH0eDsoiGnLPBlBp4TNm6rYI74nMzgz3B9IikW4WVK+dc8KZJZWYjAuORU3jc1c/NPskD2ASinf8v3xnfXeukU0sJ5N6m5E8VLjObPEO+mN2t/FZTMZLiFqPWc/ALSqnMnnhwrNi2rbfg/rd/IpL8Le3pSBne8+seeFVBoGqzHM9yXw==
+                  ' >> ~/.ssh/known_hosts
 
       - run:
-          name: deploy
+          name: Deploy RubyGems
           command: |
-            curl -u dodonki1223:$RUBYGEMS_PASSWORD https://rubygems.org/api/v1/api_key.yaml > ~/.gem/credentials; chmod 0600 ~/.gem/credentials
+            curl -u dodonki1223:$RUBYGEMS_PASSWORD https://rubygems.org/api/v1/api_key.yaml > ~/.gem/credentials
+            chmod 0600 ~/.gem/credentials
             git config user.name dodonki1223
             git config user.email $RUBYGEMS_EMAIL
             bundle exec rake build
             bundle exec rake release
 
+jobs:
+  setup:
+    executor: base
+    steps:
+      - checkout
+      - ruby/install-deps
+      - save-workspace
+
+  lint:
+    executor: base
+    steps:
+      - using-workspace
+      - ruby/install-deps
+      - ruby/rubocop-check
+
+  test:
+    executor: base
+    steps:
+      - using-workspace
+      - ruby/install-deps
+      - ruby/rspec-test:
+          out-path: 'test_results/rspec/'
+      - collect-reports
+
+  document:
+    executor: base
+    steps:
+      - using-workspace
+      - ruby/install-deps
+      - create-document
+
+  deploy:
+    executor: base
+    steps:
+      - using-workspace
+      - ruby/install-deps
+      - deploy-rubygems
+
 workflows:
-  version: 2
-  build-and-deploy:
+  version: 2.1
+  main:
     jobs:
-      - build
+      - setup
+      - lint:
+          requires:
+            - setup
+      - test:
+          requires:
+            - setup
+      - document:
+          requires:
+            - setup
       - deploy:
           requires:
-            - build
+            - lint
+            - test
           filters:
             branches:
               only: master
